@@ -7,14 +7,131 @@ class AgenticChatBot {
             apiKey: '',
             model: 'gpt-4o-mini'
         };
+        this.llmProvider = null;
         
         this.init();
     }
 
     init() {
+        this.setupLLMProvider();
         this.setupEventListeners();
         this.setupTools();
         this.updateConfigStatus();
+    }
+
+    setupLLMProvider() {
+        // Initialize Bootstrap LLM Provider
+        if (typeof BootstrapLLMProvider !== 'undefined') {
+            this.llmProvider = new BootstrapLLMProvider({
+                container: '#llm-provider-container',
+                providers: [
+                    {
+                        name: 'AIPipe',
+                        baseURL: 'https://aipipe.org/openai/v1',
+                        apiKeyLabel: 'AIPipe Token',
+                        apiKeyDescription: 'Get your token from <a href="https://aipipe.org" target="_blank">aipipe.org</a>',
+                        models: [
+                            { name: 'gpt-4o-mini', description: 'Fast & Cheap' },
+                            { name: 'gpt-4o', description: 'Best Quality' },
+                            { name: 'gpt-3.5-turbo', description: 'Legacy' }
+                        ]
+                    },
+                    {
+                        name: 'OpenAI',
+                        baseURL: 'https://api.openai.com/v1',
+                        apiKeyLabel: 'OpenAI API Key',
+                        apiKeyDescription: 'Get your API key from <a href="https://platform.openai.com" target="_blank">platform.openai.com</a>',
+                        models: [
+                            { name: 'gpt-4o-mini', description: 'Fast & Cheap' },
+                            { name: 'gpt-4o', description: 'Best Quality' },
+                            { name: 'gpt-3.5-turbo', description: 'Legacy' }
+                        ]
+                    }
+                ],
+                onConfigChange: (config) => {
+                    this.config = config;
+                    this.updateConfigStatus();
+                    console.log('LLM Config updated:', config);
+                },
+                defaultProvider: 'AIPipe',
+                defaultModel: 'gpt-4o-mini'
+            });
+        } else {
+            console.warn('BootstrapLLMProvider not available, falling back to custom implementation');
+            this.setupCustomLLMProvider();
+        }
+    }
+
+    setupCustomLLMProvider() {
+        // Fallback custom implementation if library doesn't load
+        const container = document.getElementById('llm-provider-container');
+        container.innerHTML = `
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="provider-select" class="form-label">Provider</label>
+                    <select id="provider-select" class="form-select">
+                        <option value="aipipe">AIPipe (Recommended)</option>
+                        <option value="openai">OpenAI</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="api-key" class="form-label">API Key</label>
+                    <div class="input-group">
+                        <input type="password" id="api-key" class="form-control" placeholder="Enter your API key">
+                        <button type="button" id="toggle-key" class="btn btn-outline-secondary">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label for="model-select" class="form-label">Model</label>
+                    <select id="model-select" class="form-select">
+                        <option value="gpt-4o-mini">gpt-4o-mini (Fast & Cheap)</option>
+                        <option value="gpt-4o">gpt-4o (Best Quality)</option>
+                        <option value="gpt-3.5-turbo">gpt-3.5-turbo (Legacy)</option>
+                    </select>
+                </div>
+            </div>
+        `;
+
+        // Setup event listeners for fallback implementation
+        ['provider-select', 'api-key', 'model-select'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', () => this.updateCustomConfig());
+                element.addEventListener('input', () => this.updateCustomConfig());
+            }
+        });
+
+        // Toggle API key visibility
+        const toggleBtn = document.getElementById('toggle-key');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const keyInput = document.getElementById('api-key');
+                if (keyInput.type === 'password') {
+                    keyInput.type = 'text';
+                    toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+                } else {
+                    keyInput.type = 'password';
+                    toggleBtn.innerHTML = '<i class="bi bi-eye"></i>';
+                }
+            });
+        }
+    }
+
+    updateCustomConfig() {
+        const provider = document.getElementById('provider-select')?.value;
+        const apiKey = document.getElementById('api-key')?.value;
+        const model = document.getElementById('model-select')?.value;
+
+        if (provider && apiKey && model) {
+            this.config = {
+                baseURL: provider === 'aipipe' ? 'https://aipipe.org/openai/v1' : 'https://api.openai.com/v1',
+                apiKey: apiKey.trim(),
+                model: model
+            };
+            this.updateConfigStatus();
+        }
     }
 
     setupEventListeners() {
@@ -32,48 +149,10 @@ class AgenticChatBot {
             }
         });
 
-        // Provider configuration
-        ['provider-select', 'api-key', 'model-select'].forEach(id => {
-            document.getElementById(id).addEventListener('change', () => {
-                this.updateConfig();
-            });
-            document.getElementById(id).addEventListener('input', () => {
-                this.updateConfig();
-            });
-        });
-
-        // API key visibility toggle
-        document.getElementById('toggle-key').addEventListener('click', () => {
-            const keyInput = document.getElementById('api-key');
-            const toggleBtn = document.getElementById('toggle-key');
-            
-            if (keyInput.type === 'password') {
-                keyInput.type = 'text';
-                toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i>';
-            } else {
-                keyInput.type = 'password';
-                toggleBtn.innerHTML = '<i class="bi bi-eye"></i>';
-            }
-        });
-
         // Test connection
         document.getElementById('test-connection').addEventListener('click', () => {
             this.testConnection();
         });
-    }
-
-    updateConfig() {
-        const provider = document.getElementById('provider-select').value;
-        const apiKey = document.getElementById('api-key').value;
-        const model = document.getElementById('model-select').value;
-
-        this.config = {
-            baseURL: provider === 'aipipe' ? 'https://aipipe.org/openai/v1' : 'https://api.openai.com/v1',
-            apiKey: apiKey.trim(),
-            model: model
-        };
-
-        this.updateConfigStatus();
     }
 
     updateConfigStatus() {
@@ -317,57 +396,83 @@ return {
         } else {
             this.addMessage('assistant', 'Demo mode active! I can demonstrate:\n\n• ✨ **JavaScript execution** - "calculate tip" or "fibonacci"\n• 🔍 **Search simulation** - "search for information"\n• 🤖 **Tool usage** - "sort an array"\n\nConfigure your LLM provider above for intelligent conversation and automatic tool selection!');
         }
+        
+        // Add completion message for demo mode
+        setTimeout(() => {
+            this.addMessage('assistant', '✅ I have completed all the tasks assigned by you. Let me know if you need help with anything else.');
+        }, 1000);
     }
 
     async agenticLoop() {
-    this.isProcessing = true;
-    this.setStatus('🤖 Agent thinking...');
-    
-    try {
-        let loopCount = 0;
-        const maxLoops = 10;
-        let tasksCompleted = false;
+        this.isProcessing = true;
+        this.setStatus('🤖 Agent thinking...');
         
-        while (loopCount < maxLoops) {
-            const response = await this.callLLM();
+        try {
+            let loopCount = 0;
+            const maxLoops = 10;
+            let tasksCompleted = false;
+            let toolsUsed = [];
             
-            if (response.content) {
-                this.addMessage('assistant', response.content);
-            }
-            
-            if (response.tool_calls && response.tool_calls.length > 0) {
-                this.messages.push({
-                    role: 'assistant',
-                    content: response.content,
-                    tool_calls: response.tool_calls
-                });
+            while (loopCount < maxLoops) {
+                const response = await this.callLLM();
                 
-                await this.handleToolCalls(response.tool_calls);
-                loopCount++;
-            } else {
-                // No more tool calls, tasks completed successfully
-                tasksCompleted = true;
-                break;
+                if (response.content) {
+                    this.addMessage('assistant', response.content);
+                }
+                
+                if (response.tool_calls && response.tool_calls.length > 0) {
+                    this.messages.push({
+                        role: 'assistant',
+                        content: response.content,
+                        tool_calls: response.tool_calls
+                    });
+                    
+                    // Track which tools were used
+                    response.tool_calls.forEach(toolCall => {
+                        if (!toolsUsed.includes(toolCall.function.name)) {
+                            toolsUsed.push(toolCall.function.name);
+                        }
+                    });
+                    
+                    await this.handleToolCalls(response.tool_calls);
+                    loopCount++;
+                } else {
+                    tasksCompleted = true;
+                    break;
+                }
             }
+            
+            if (loopCount >= maxLoops) {
+                this.addMessage('system', '⚠️ Maximum loop iterations reached. Task completed.');
+                this.addMessage('assistant', 'I have completed all the tasks assigned by you. Let me know if you need help with anything else.');
+            } else if (tasksCompleted) {
+                let completionMessage = '✅ I have completed all the tasks assigned by you.';
+                
+                if (toolsUsed.length > 0) {
+                    const toolNames = {
+                        'google_search': '🔍 Google Search',
+                        'execute_javascript': '💻 JavaScript Execution',
+                        'ai_task': '🤖 AI Processing'
+                    };
+                    
+                    const usedToolsDisplay = toolsUsed.map(tool => toolNames[tool] || tool).join(', ');
+                    completionMessage += `\n\n📋 Tools used: ${usedToolsDisplay}`;
+                }
+                
+                completionMessage += '\n\n💬 Let me know if you need help with anything else!';
+                
+                this.addMessage('assistant', completionMessage);
+            }
+            
+        } catch (error) {
+            console.error('Agentic loop error:', error);
+            this.showAlert('Error in agentic loop: ' + error.message, 'danger');
+            this.addMessage('system', `❌ Error: ${error.message}\n\nTip: If this is a connection error, your API key might be working even if the test failed due to CORS restrictions.`);
+        } finally {
+            this.isProcessing = false;
+            this.setStatus('Ready to chat!');
         }
-        
-        if (loopCount >= maxLoops) {
-            this.addMessage('system', '⚠️ Maximum loop iterations reached. Task completed.');
-            this.addMessage('assistant', 'I have completed all the tasks assigned by you. Let me know if you need help with anything else.');
-        } else if (tasksCompleted) {
-            // Add completion message when all tasks are done successfully
-            this.addMessage('assistant', '✅ I have completed all the tasks assigned by you. Let me know if you need help with anything else.');
-        }
-        
-    } catch (error) {
-        console.error('Agentic loop error:', error);
-        this.showAlert('Error in agentic loop: ' + error.message, 'danger');
-        this.addMessage('system', `❌ Error: ${error.message}\n\nTip: If this is a connection error, your API key might be working even if the test failed due to CORS restrictions.`);
-    } finally {
-        this.isProcessing = false;
-        this.setStatus('Ready to chat!');
     }
-}
 
     async callLLM() {
         const response = await fetch(`${this.config.baseURL}/chat/completions`, {
@@ -438,20 +543,17 @@ return {
     }
 
     async googleSearch(query) {
-        // Get credentials from form inputs
         const GOOGLE_API_KEY = document.getElementById('google-api-key')?.value || '';
         const GOOGLE_CX = document.getElementById('google-cx')?.value || '';
         
         this.addMessage('system', `🔍 Searching Google for: "${query}"`);
         
-        // Check if Google credentials are configured
         if (!GOOGLE_API_KEY || !GOOGLE_CX) {
             this.addMessage('system', '⚠️ Google Search API not configured. Using mock results.');
             return this.mockGoogleSearch(query);
         }
         
         try {
-            // Real Google Custom Search API call
             const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodeURIComponent(query)}&num=5`;
             
             const response = await fetch(url);
@@ -471,14 +573,12 @@ return {
                 };
             }
             
-            // Format real results
             const results = data.items.map(item => ({
                 title: item.title,
                 link: item.link,
                 snippet: item.snippet || 'No description available'
             }));
             
-            // Display results in chat
             this.addSearchResults(results, false);
             
             return {
@@ -491,8 +591,6 @@ return {
         } catch (error) {
             console.error('Google Search Error:', error);
             this.addMessage('system', `❌ Google Search failed: ${error.message}`);
-            
-            // Fall back to mock results on error
             return this.mockGoogleSearch(query);
         }
     }
@@ -550,24 +648,18 @@ return {
         this.addCodeBlock(code);
         
         try {
-            // Improved JavaScript execution with proper return handling
             let result;
             
-            // Check if code already has return statement
             if (code.includes('return ')) {
-                // Execute as function body
                 result = Function('"use strict"; ' + code)();
             } else {
-                // Try to execute as expression first
                 try {
                     result = Function('"use strict"; return (' + code + ')')();
                 } catch (e) {
-                    // If expression fails, execute as statements
                     result = Function('"use strict"; ' + code)();
                 }
             }
             
-            // Handle different result types
             let displayResult;
             if (result === undefined) {
                 displayResult = 'undefined (code executed but no value returned)';
@@ -657,7 +749,6 @@ return {
     addMessage(role, content) {
         const chatContainer = document.getElementById('chat-container');
         
-        // Clear initial message if this is the first real message
         if (chatContainer.children.length === 1 && chatContainer.textContent.includes('Welcome to Agentic ChatBot')) {
             chatContainer.innerHTML = '';
         }
@@ -735,29 +826,39 @@ return {
     }
 
     showAlert(message, type = 'info') {
-    if (typeof BootstrapAlert !== 'undefined') {
-        new BootstrapAlert({
-            container: '#alert-container',
-            type: type,
-            message: message,
-            dismissible: true,
-            timeout: 5000
-        });
-    } else {
-        // Fallback to custom implementation
-        const alertContainer = document.getElementById('alert-container');
-        const alertId = 'alert-' + Date.now();
-        
-        const alertHTML = `
-            <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
-                <i class="bi bi-info-circle"></i> ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        
-        alertContainer.insertAdjacentHTML('beforeend', alertHTML);
+        // Try to use BootstrapAlert library if available
+        if (typeof BootstrapAlert !== 'undefined') {
+            new BootstrapAlert({
+                container: '#alert-container',
+                type: type,
+                message: message,
+                dismissible: true,
+                timeout: 5000
+            });
+        } else {
+            // Fallback to custom implementation
+            const alertContainer = document.getElementById('alert-container');
+            const alertId = 'alert-' + Date.now();
+            
+            const alertHTML = `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            alertContainer.insertAdjacentHTML('beforeend', alertHTML);
+            
+            setTimeout(() => {
+                const alert = document.getElementById(alertId);
+                if (alert) {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }
+            }, 5000);
+        }
     }
-}
 }
 
 // Initialize the chatbot when the page loads
