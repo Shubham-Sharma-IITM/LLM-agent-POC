@@ -223,7 +223,7 @@ To add new tools, extend the tools array in `setupTools()`:
     }
   }
 }
-Then implement the tool in the executeTool() method.
+Then implement the tool in the executeTool() method. ```
 
 ## Customization
 Styling: Modify CSS in the <style> section of the HTML file
